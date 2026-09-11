@@ -1,0 +1,17 @@
+{
+  "name": "my-jenkins-app",
+  "version": "1.0.0",
+  "description": "Calculator app built and deployed via Jenkins",
+  "scripts": {
+    "test": "jest --ci --reporters=default --reporters=jest-junit",
+    "build": "rm -rf dist && mkdir dist && cp -r public/* dist/"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "jest-junit": "^16.0.0"
+  },
+  "jest-junit": {
+    "outputDirectory": "reports",
+    "outputName": "junit.xml"
+  }
+}
