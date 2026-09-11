@@ -55,7 +55,7 @@ pipeline {
                         cp -r ../dist/* .
                         git add -A
                         git -c user.name="Jenkins CI" -c user.email="ci@jenkins.local" commit -m "Deploy build ${BUILD_NUMBER}" || echo "Nothing to commit"
-                        git push origin gh-pages
+                        git push origin gh-pages --force
                     '''
                 }
             }
