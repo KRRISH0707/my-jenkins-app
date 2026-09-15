@@ -5,6 +5,11 @@ pipeline {
         nodejs 'NodeJS-20'
     }
 
+    environment {
+        DOCKER_IMAGE = 'krrish0707/calculator-app'
+        IMAGE_TAG = "${env.BUILD_NUMBER}"
+    }
+
     options {
         timestamps()
         buildDiscarder(logRotator(numToKeepStr: '10'))
@@ -36,35 +41,42 @@ pipeline {
             }
         }
 
-        stage('Build') {
+        stage('Build Artifacts') {
             steps {
                 sh 'npm run build'
             }
         }
 
-        stage('Deploy to GitHub Pages') {
+        stage('Build Docker Image') {
             steps {
-                withCredentials([string(credentialsId: 'github-token', variable: 'GITHUB_TOKEN')]) {
-                    sh '''
-                        set -e
-                        rm -rf gh-pages-deploy
-                        git clone --depth 1 https://x-access-token:${GITHUB_TOKEN}@github.com/KRRISH0707/my-jenkins-app.git gh-pages-deploy
-                        cd gh-pages-deploy
-                        git checkout gh-pages || git checkout --orphan gh-pages
-                        git rm -rf . || true
-                        cp -r ../dist/* .
-                        git add -A
-                        git -c user.name="Jenkins CI" -c user.email="ci@jenkins.local" commit -m "Deploy build ${BUILD_NUMBER}" || echo "Nothing to commit"
-                        git push origin gh-pages --force
-                    '''
+                sh "docker build -t ${DOCKER_IMAGE}:${IMAGE_TAG} ."
+                sh "docker tag ${DOCKER_IMAGE}:${IMAGE_TAG} ${DOCKER_IMAGE}:latest"
+            }
+        }
+
+        stage('Push Docker Image') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'docker-hub-credentials', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                    sh 'echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin'
+                    sh "docker push ${DOCKER_IMAGE}:${IMAGE_TAG}"
+                    sh "docker push ${DOCKER_IMAGE}:latest"
                 }
+            }
+        }
+
+        stage('Deploy to Kubernetes') {
+            steps {
+                sh 'kubectl apply -f kubernetes/service.yaml'
+                sh 'kubectl apply -f kubernetes/deployment.yaml'
+                sh "kubectl set image deployment/calculator-app calculator-app=${DOCKER_IMAGE}:${IMAGE_TAG}"
+                sh "kubectl rollout status deployment/calculator-app"
             }
         }
     }
 
     post {
         success {
-            echo "Build #${env.BUILD_NUMBER} succeeded! Site deployed."
+            echo "Build #${env.BUILD_NUMBER} succeeded! Application deployed to Kubernetes."
         }
         failure {
             echo "Build #${env.BUILD_NUMBER} failed."
